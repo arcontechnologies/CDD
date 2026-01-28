@@ -7,11 +7,10 @@ using System.Text;
 using System.Xml;
 using System.Data;
 using System.Data.SqlClient;
-using Newtonsoft.Json;
 using System.Configuration;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Windows.Forms;
+
 
 namespace cdd
 {
@@ -39,8 +38,7 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in Get SQL Table: '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ GetSQLTable -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
+      
                 
             }
 
@@ -72,9 +70,7 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in Get AG Table vs AG: '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ Get AG table -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                Loginfo(Cdd.ErrorReporting, "ERROR");
+ 
             }
             return columntable;
         }
@@ -154,14 +150,7 @@ namespace cdd
                             Resulttable.Columns[i].ColumnName = MappedColumn.Item2.ToString();
                         }
                         else
-                        {
-                            // case where column should be deleted
-                            //NewRow = exceptiontable.NewRow();
-                            //NewRow["COLUMN_NAME"] = AGtable.Rows[i]["COLUMN_NAME"].ToString();
-                            //NewRow["EXCEPTION"] = "added";
-                            //exceptiontable.Rows.Add(NewRow);
-                            Console.WriteLine("column : {0} is deleted", Resulttable.Columns[i].ToString());
-                            Cdd.ExecutionSteps = Cdd.ExecutionSteps + "......column " + Resulttable.Columns[i].ToString() + " is deleted." + '\n';
+                        { 
                             handled_Column = Resulttable.Columns[i].ToString();
                             Resulttable.Columns.Remove(Resulttable.Columns[i]);
                         }
@@ -171,9 +160,6 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in Compare Rows SQL table vs AG: '{0}' ---- Column issue : {1} ------", e, handled_Column);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ Compare Rows SQL table vs AG -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                Loginfo(Cdd.ErrorReporting, "ERROR");
             }
             return Resulttable;
         }
@@ -200,13 +186,11 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in Kill Process : '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
+     
             }
             
              if (datatable.Rows[0]["Value"].ToString() == "YES")
              {
-                 Cdd.StepbyStep = Cdd.StepbyStep + " -> Kill Process - done...." + '\n';
-                 Loginfo(Cdd.StepbyStep, "STEP");
                  System.Environment.Exit(0);
              }
         }
@@ -292,8 +276,7 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in get connection: '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ GetConnectionString -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
+               
             }
 
             return ConnectionString;
@@ -322,8 +305,7 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in load configuration : '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ LoadConfiguration -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
+  
             }
             return datatable;
         }
@@ -361,118 +343,13 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in list configuration : '{0}'", e);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ readlistconfiguration -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
+  
             }
             return result;
 
         }
 
-        // the method used to call the CAAGILE API by submitting a request and returns a json file.
-        public static string WebRequestWithCredentials(string url, string credentials)
-        {
-            string dbserver = ConfigurationManager.AppSettings["dbserver"].ToString();
-            string database = ConfigurationManager.AppSettings["database"].ToString();
-            string configtable = ConfigurationManager.AppSettings["configtable"].ToString();
-            string json = string.Empty;
-            bool tryagain = true;
-
-            while (tryagain)
-            {
-                // killprogram(dbserver, database, configtable); // dynamically kill the program if needed
-
-                try
-                {
-                    CredentialCache mycache = new CredentialCache();
-                    HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-
-
-                    request.Proxy = WebRequest.DefaultWebProxy;
-
-                    //request.UserAgent = "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)";
-                    //request.Method = "GET";
-
-                    //var proxyUri = WebRequest.GetSystemWebProxy().GetProxy(new Uri("https://eu1.rallydev.com/slm/webservice/v2.0/"));
-                    //request.Proxy = new WebProxy(proxyUri);
-
-                    //ServicePointManager.Expect100Continue = true;
-                    //ServicePointManager.DnsRefreshTimeout = 4 * 60 * 1000; // 4 minutes
-                    //ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-                    request.Timeout = -1;
-                    request.KeepAlive = true;
-
-                    //string oAuthToken = String.Format("{0}:{1}", "API_KEY", "_L0N5VKSoQSya6KkaOWw3gGCMEmOKKUztDW4UrSggdo");
-                    request.Headers["Authorization"] = "Basic " + Convert.ToBase64String(Encoding.ASCII.GetBytes(credentials));
-                   
-                    //request.Headers.Add(HttpRequestHeader.Authorization, "_L0N5VKSoQSya6KkaOWw3gGCMEmOKKUztDW4UrSggdo");
-
-
-                    try
-                    {                                              
-                        using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                        {
-                            using (Stream stream = response.GetResponseStream())
-                            {
-                                using (StreamReader reader = new StreamReader(stream))
-                                {
-                                    json = reader.ReadToEnd();
-                                    reader.Close();
-                                }
-                                stream.Close();
-                            }
-
-                            json.Replace("\"", @"""");
-                            if (json.TrimStart().StartsWith("<") == false)
-                            {
-                                tryagain = false;
-                                response.Close();
-                            }
-                            
-                        }
-                        
-                    }
-                    catch (WebException e)
-                    {
-                        Console.WriteLine("An error occurred in HTTP request (web exception) : {0}- trygain ", e.Message);
-                        Cdd.ErrorReporting = Cdd.ErrorReporting + e +'\n'+"********************** Related Json ********************"+'\n'+json;
-
-                        var resp = (HttpWebResponse) e.Response;
-                        if (resp.StatusCode == HttpStatusCode.NotFound)
-                        {
-                            Console.WriteLine("Url Not found : {0} ",url);
-                            //tryagain = false;
-                            //request.Abort();
-                        }
-
-                        if (e.Status == WebExceptionStatus.ProtocolError)
-                        {
-                            //WebResponse resp = e.Response;
-                            using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
-                            {
-                                 string srrep = sr.ReadToEnd();
-                                 Cdd.ErrorReporting = Cdd.ErrorReporting + e + '\n' + "********************** Related bad gateway 502 ********************" + '\n' + srrep;
-                                 //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                                 //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        request.Abort();
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("An error occurred in HTTP request : {0}- trygain ", e.Message);
-                    Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                    //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                }
-            }
-
-           
-            return json;
-        }
+  
 
         public static HttpClient WebAuthenticationWithToken()
         {
@@ -503,8 +380,7 @@ namespace cdd
             catch (Exception e)
             {
                 Console.WriteLine("An error occurred in HTTP request (other exception) : {0}- trygain ", e.Message);
-                Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                //Email.SendMail(CddLink.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), CddLink.ErrorReporting);
+ 
             }
             return confClient;
         }
@@ -538,12 +414,12 @@ namespace cdd
                     }
                     else
                     {
-                        Console.WriteLine("Url : {0} - The status Message is : {1}", url, message.StatusCode);
-                        Cdd.logger.Error("Url : {0} - The status Message is : {1}", url, message.StatusCode);
+                        //Console.WriteLine("Url : {0} - The status Message is : {1}", url, message.StatusCode);
+                        //Cdd.logger.Error("Url : {0} - The status Message is : {1}", url, message.StatusCode);
                         if (message.StatusCode.ToString() == "NotFound")
                         {
                             //Console.WriteLine("The status code is : {0} for this url : <{1}>", message.StatusCode.ToString(), url);
-                            Cdd.logger.Error("The status code is : {0} for this url : <{1}>", message.StatusCode.ToString(), url);
+                            //Cdd.logger.Error("The status code is : {0} for this url : <{1}>", message.StatusCode.ToString(), url);
                             tryagain = false;
                             return "NotFound";
                         }
@@ -552,24 +428,19 @@ namespace cdd
                 catch (WebException e)
                 {
                     Console.WriteLine("URL : {0} + '\n' + An error occurred in HTTP request (web exception) : {1}- trygain ", url, e.Message);
-                    Cdd.ErrorReporting = Cdd.ErrorReporting + e + '\n' + "********************** Related Json ********************" + '\n' + json;
+                  
                     if (e.Status == WebExceptionStatus.ProtocolError)
                     {
                         WebResponse resp = e.Response;
                         using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
                         {
                             string srrep = sr.ReadToEnd();
-                            Cdd.ErrorReporting = Cdd.ErrorReporting + e + '\n' + "********************** Related bad gateway 502 ********************" + '\n' + srrep;
-                            //Email.SendMail(Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                            //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
+                            
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    // Console.WriteLine("An error occurred in HTTP request : {0}- trygain ", e.Message);
-                    Console.WriteLine("this url is corrupted: {0} --- {1}", url, e.Message);
-                    Cdd.logger.Error("this url is corrupted: {0} --- {1}", url, e.Message);
                     tryagain = false;
                     return "NotFound";
                 }
@@ -577,73 +448,6 @@ namespace cdd
             return json;
         }
 
-
-
-        public static XmlDocument WebRequestWithTokenStream(HttpClient confClient, string url)
-        {
-            string json = string.Empty;
-            bool tryagain = true;
-            XmlDocument doc = new XmlDocument();
-            while (tryagain)
-            {
-                try
-                {
-                    using (Stream s = confClient.GetStreamAsync(url).Result)
-                    using (StreamReader sr = new StreamReader(s))
-                    using (JsonReader reader = new JsonTextReader(sr))
-                    {
-                        JsonSerializer serializer = new JsonSerializer();
-
-                        // read the json from a stream
-                        // json size doesn't matter because only a small piece is read at a time from the HTTP request
-                        doc = serializer.Deserialize<XmlDocument>(reader);
-                        
-                    }
-
-
-                    /*
-                    HttpResponseMessage message = confClient.GetAsync(url).Result;
-
-                    if (message.IsSuccessStatusCode)
-                    {
-                        var inter = message.Content.ReadAsStringAsync();
-                        //json = JsonConvert.DeserializeObject<string>(inter.Result);
-                        json = inter.Result;
-
-
-                        json.Replace("\"", @"""");
-                        if (json.TrimStart().StartsWith("<") == false)
-                        {
-                            tryagain = false;
-                        }
-
-                    } */
-                }
-                catch (WebException e)
-                {
-                    Console.WriteLine("An error occurred in HTTP request (web exception) : {0}- trygain ", e.Message);
-                    Cdd.ErrorReporting = Cdd.ErrorReporting + e + '\n' + "********************** Related Json ********************" + '\n' + json;
-                    if (e.Status == WebExceptionStatus.ProtocolError)
-                    {
-                        WebResponse resp = e.Response;
-                        using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
-                        {
-                            string srrep = sr.ReadToEnd();
-                            Cdd.ErrorReporting = Cdd.ErrorReporting + e + '\n' + "********************** Related bad gateway 502 ********************" + '\n' + srrep;
-                            //Email.SendMail(Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                            //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("An error occurred in HTTP request : {0}- trygain ", e.Message);
-                    Cdd.ErrorReporting = Cdd.ErrorReporting + e;
-                    //Email.SendMail(Cdd.Emailadr, "REPORTED ERROR in  @ webrequest -" + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), Cdd.ErrorReporting);
-                }
-            }
-            return doc;
-        }   
 
         public static void RenameXMLNode(XmlDocument doc, XmlNode oldRoot, string newname)
         {
@@ -703,95 +507,95 @@ namespace cdd
 
         // in order to avoid to many children tables in SQL stagging, I aggregate  all those table in "data" which become the master table with all 1-1 attributes
         // the "_data" are left with this integration as the relation with "data" table is 1-N
-        public static void DatasetPostProcessing(DataSet dataset)
-        {
-            //if (ContainsRepeatedData(dataset))
-            //{
-            //    foreach (DataTable dt in dataset.Tables)
-            //    {
-            //        if (dt.TableName != "data" && dt.TableName != "root")
-            //        {
-            //            if (dt.TableName.Contains("_data"))
-            //            {
-            //                try
-            //                {
-            //                    dataset.Tables[dt.TableName].Merge(dataset.Tables[dt.TableName.Remove(dt.TableName.Length - 5, 5)]);
-            //                    dataset.Tables[dt.TableName].AcceptChanges();
-            //                }
-            //                catch (Exception e)
-            //                {
-            //                    Cdd.logger.Info(e, "An error occurred in Merge data table : '{0}'");
-            //                }
-            //            }
-            //            else
-            //            {
-            //                if (!DataTableWithDataExist(dataset, dt))
-            //                {
-            //                    for (int i = 0; i < dt.Columns.Count; i++)
-            //                    {
-            //                        if (dt.Columns[i].ColumnName != "data_Id")
-            //                        {
-            //                            dt.Columns[i].ColumnName = dt.TableName + "_at_" + dt.Columns[i].ColumnName;
-            //                        }
-            //                    }
+        //public static void DatasetPostProcessing(DataSet dataset)
+        //{
+        //    //if (ContainsRepeatedData(dataset))
+        //    //{
+        //    //    foreach (DataTable dt in dataset.Tables)
+        //    //    {
+        //    //        if (dt.TableName != "data" && dt.TableName != "root")
+        //    //        {
+        //    //            if (dt.TableName.Contains("_data"))
+        //    //            {
+        //    //                try
+        //    //                {
+        //    //                    dataset.Tables[dt.TableName].Merge(dataset.Tables[dt.TableName.Remove(dt.TableName.Length - 5, 5)]);
+        //    //                    dataset.Tables[dt.TableName].AcceptChanges();
+        //    //                }
+        //    //                catch (Exception e)
+        //    //                {
+        //    //                    Cdd.logger.Info(e, "An error occurred in Merge data table : '{0}'");
+        //    //                }
+        //    //            }
+        //    //            else
+        //    //            {
+        //    //                if (!DataTableWithDataExist(dataset, dt))
+        //    //                {
+        //    //                    for (int i = 0; i < dt.Columns.Count; i++)
+        //    //                    {
+        //    //                        if (dt.Columns[i].ColumnName != "data_Id")
+        //    //                        {
+        //    //                            dt.Columns[i].ColumnName = dt.TableName + "_at_" + dt.Columns[i].ColumnName;
+        //    //                        }
+        //    //                    }
 
-            //                    try
-            //                    {
-            //                        dataset.Tables["data"].Merge(dt);
-            //                        dataset.Tables["data"].AcceptChanges();
-            //                    }
-            //                    catch (Exception e)
-            //                    {
-            //                        Cdd.logger.Info(e, "An error occurred in Merge data table : '{0}'");
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
-                // first process _data by adding all parent attributes
+        //    //                    try
+        //    //                    {
+        //    //                        dataset.Tables["data"].Merge(dt);
+        //    //                        dataset.Tables["data"].AcceptChanges();
+        //    //                    }
+        //    //                    catch (Exception e)
+        //    //                    {
+        //    //                        Cdd.logger.Info(e, "An error occurred in Merge data table : '{0}'");
+        //    //                    }
+        //    //                }
+        //    //            }
+        //    //        }
+        //    //    }
+        //        // first process _data by adding all parent attributes
 
 
-            //}
-            //else
-            //{
+        //    //}
+        //    //else
+        //    //{
 
-                // before adding tables, look to the tables where no data_id column and add them to their parents
+        //        // before adding tables, look to the tables where no data_id column and add them to their parents
 
-                foreach (DataTable dt in dataset.Tables)
-                {
-                   if (!dt.Columns.Contains("data_Id"))
-                   {
-                    string ParentTableName = LookForParentTable(dt);
-                    for (int i = 0; i < dt.Columns.Count; i++)
-                    {
-                        if (dt.Columns[i].ColumnName != ParentTableName + "_Id")
-                        {
-                            dt.Columns[i].ColumnName = dt.TableName + "_at2_" + dt.Columns[i].ColumnName;
-                        }
-                        dataset.Tables[ParentTableName].Merge(dt);
-                        dataset.Tables[ParentTableName].AcceptChanges();
-                    }
-                   }
+        //        foreach (DataTable dt in dataset.Tables)
+        //        {
+        //           if (!dt.Columns.Contains("data_Id"))
+        //           {
+        //            string ParentTableName = LookForParentTable(dt);
+        //            for (int i = 0; i < dt.Columns.Count; i++)
+        //            {
+        //                if (dt.Columns[i].ColumnName != ParentTableName + "_Id")
+        //                {
+        //                    dt.Columns[i].ColumnName = dt.TableName + "_at2_" + dt.Columns[i].ColumnName;
+        //                }
+        //                dataset.Tables[ParentTableName].Merge(dt);
+        //                dataset.Tables[ParentTableName].AcceptChanges();
+        //            }
+        //           }
 
-                }
+        //        }
 
-                foreach (DataTable dt in dataset.Tables)
-                {
-                    if (dt.TableName != "data" && dt.TableName != "root")
-                    {               
-                        for (int i = 0; i < dt.Columns.Count; i++)
-                        {
-                            if (dt.Columns[i].ColumnName != "data_Id")
-                            {
-                                dt.Columns[i].ColumnName = dt.TableName + "_at1_" + dt.Columns[i].ColumnName;
-                            }
-                        }
-                        dataset.Tables["data"].Merge(dt);
-                        dataset.Tables["data"].AcceptChanges();
-                    }
-                }
-            //}
-        }
+        //        foreach (DataTable dt in dataset.Tables)
+        //        {
+        //            if (dt.TableName != "data" && dt.TableName != "root")
+        //            {               
+        //                for (int i = 0; i < dt.Columns.Count; i++)
+        //                {
+        //                    if (dt.Columns[i].ColumnName != "data_Id")
+        //                    {
+        //                        dt.Columns[i].ColumnName = dt.TableName + "_at1_" + dt.Columns[i].ColumnName;
+        //                    }
+        //                }
+        //                dataset.Tables["data"].Merge(dt);
+        //                dataset.Tables["data"].AcceptChanges();
+        //            }
+        //        }
+        //    //}
+        //}
 
 
 
