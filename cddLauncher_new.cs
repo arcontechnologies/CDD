@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Configuration;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace cdd
 {
@@ -9,129 +10,139 @@ namespace cdd
     {
         public static string ExecutionSteps { get; set; }
         public static string ErrorReporting { get; set; }
-        public static string StepbyStep { get; set; }
         public static string emailadr { get; set; }
 
         static void Main(string[] args)
         {
-            string environment = ConfigurationManager.AppSettings["ENV"].ToString();
-            string prgload = ConfigurationManager.AppSettings["PRGLOAD"].ToString();
-            string prgsql = ConfigurationManager.AppSettings["PRGSQL"].ToString();
-            string dbserver = ConfigurationManager.AppSettings["dbserver"].ToString();
-            string database = ConfigurationManager.AppSettings["database"].ToString();
-            string filewatcher = ConfigurationManager.AppSettings["FILEWATCHER"].ToString();
-            
-            ExecutionSteps = string.Empty;
-            ErrorReporting = string.Empty;
-            StepbyStep = string.Empty;
-            emailadr = string.Empty;
-            emailadr = ConfigurationManager.AppSettings["Email"].ToString();
-            
+            string environment = ConfigurationManager.AppSettings["ENV"]?.ToString() ?? "Unknown";
+            // Get filenames from config
+            string prgloadConfig = ConfigurationManager.AppSettings["PRGLOAD"]?.ToString();
+            string prgsqlConfig = ConfigurationManager.AppSettings["PRGSQL"]?.ToString();
+            string filewatcher = ConfigurationManager.AppSettings["FILEWATCHER"]?.ToString();
+            emailadr = ConfigurationManager.AppSettings["Email"]?.ToString();
+
+            // Resolve full paths to ensure UseShellExecute=false works
+            string prgload = ResolvePath(prgloadConfig);
+            string prgsql = ResolvePath(prgsqlConfig);
+
             ExecutionSteps = "---------------------------------------------------------" + '\n';
-            ExecutionSteps = ExecutionSteps + "CDD Launcher started @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + " - Environment : " + environment + '\n';
-            ExecutionSteps = ExecutionSteps + "---------------------------------------------------------" + '\n';
+            ExecutionSteps += $"CDD Launcher started @ {DateTime.Now:yyyy-MM-dd : HH:mm:ss} - Environment : {environment}\n";
+            ExecutionSteps += "---------------------------------------------------------" + '\n';
 
             try
             {
-                // Step 1: Execute cdd.exe 1 (truncate and load initial tables)
+                // Validate files exist before starting
+                if (!File.Exists(prgload)) throw new FileNotFoundException($"Cannot find cdd executable at: {prgload}");
+                if (!File.Exists(prgsql)) throw new FileNotFoundException($"Cannot find cddsorted executable at: {prgsql}");
+
+                // ---------------------------------------------------------
+                // Step 1: Sequential Execution (cdd.exe 1)
+                // ---------------------------------------------------------
                 Console.WriteLine("Starting Step 1: Initial data load...");
-                int exitCode = ExecuteProcess(prgload, "1");
-                if (exitCode != 0)
-                {
-                    throw new Exception($"Step 1 failed with exit code {exitCode}");
-                }
-                ExecutionSteps = ExecutionSteps + "Step 1 completed @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + '\n';
+                int exitCode1 = ExecuteProcess(prgload, "1");
+                if (exitCode1 != 0) throw new Exception($"Step 1 failed with exit code {exitCode1}");
 
-                // Step 2, 3, 4: Execute in parallel
+                ExecutionSteps += $"Step 1 completed @ {DateTime.Now:yyyy-MM-dd : HH:mm:ss}\n";
+
+                // ---------------------------------------------------------
+                // Step 2, 3, 4: Parallel Execution
+                // ---------------------------------------------------------
                 Console.WriteLine("Starting Steps 2, 3, 4 in parallel...");
-                
-                Task<int> step2Task = Task.Run(() => ExecuteProcess(prgload, "2"));
-                Task<int> step3Task = Task.Run(() => ExecuteProcess(prgload, "3"));
-                Task<int> step4Task = Task.Run(() => ExecuteProcess(prgload, "4"));
 
-                // Wait for all parallel tasks to complete
-                Task.WaitAll(step2Task, step3Task, step4Task);
+                // Create tasks for parallel execution
+                Task<int> task2 = Task.Run(() => ExecuteProcess(prgload, "2"));
+                Task<int> task3 = Task.Run(() => ExecuteProcess(prgload, "3"));
+                Task<int> task4 = Task.Run(() => ExecuteProcess(prgload, "4"));
 
-                // Check exit codes
-                if (step2Task.Result != 0)
-                {
-                    throw new Exception($"Step 2 failed with exit code {step2Task.Result}");
-                }
-                if (step3Task.Result != 0)
-                {
-                    throw new Exception($"Step 3 failed with exit code {step3Task.Result}");
-                }
-                if (step4Task.Result != 0)
-                {
-                    throw new Exception($"Step 4 failed with exit code {step4Task.Result}");
-                }
+                // Wait for all to finish
+                Task.WaitAll(task2, task3, task4);
 
-                ExecutionSteps = ExecutionSteps + "Steps 2, 3, 4 completed @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + '\n';
-                ExecutionSteps = ExecutionSteps + "Load CDD staging completed @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + " - Environment : " + environment + '\n';
+                // Validate results
+                if (task2.Result != 0) throw new Exception($"Step 2 failed with exit code {task2.Result}");
+                if (task3.Result != 0) throw new Exception($"Step 3 failed with exit code {task3.Result}");
+                if (task4.Result != 0) throw new Exception($"Step 4 failed with exit code {task4.Result}");
 
-                // Execute cddsorted.exe
+                ExecutionSteps += $"Steps 2, 3, 4 completed @ {DateTime.Now:yyyy-MM-dd : HH:mm:ss}\n";
+                ExecutionSteps += $"Load CDD staging completed\n";
+
+                // ---------------------------------------------------------
+                // Final Step: Execute cddsorted.exe
+                // ---------------------------------------------------------
                 Console.WriteLine("Starting cddsorted process...");
-                Process sqlProc = new Process();
-                sqlProc.StartInfo.FileName = prgsql;
-                sqlProc.Start();
-                sqlProc.WaitForExit();
+                int exitCodeSql = ExecuteProcess(prgsql, ""); // Assuming no args for cddsorted
+                
+                if (exitCodeSql != 0) throw new Exception($"cddsorted failed with exit code {exitCodeSql}");
 
-                if (sqlProc.ExitCode != 0)
-                {
-                    throw new Exception($"cddsorted failed with exit code {sqlProc.ExitCode}");
-                }
-
-                ExecutionSteps = ExecutionSteps + "Load CDD ODS completed @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + " - Environment : " + environment + '\n';
+                ExecutionSteps += $"Load CDD ODS completed @ {DateTime.Now:yyyy-MM-dd : HH:mm:ss}\n";
             }
             catch (Exception ex)
             {
-                Console.WriteLine("An error occurred!!!: " + ex.Message);
-                ErrorReporting = ex.Message + '\n' + ex.StackTrace;
-                ExecutionSteps = ExecutionSteps + "ERROR: " + ex.Message + '\n';
+                Console.WriteLine($"\nCRITICAL ERROR: {ex.Message}");
+                ErrorReporting = ex.ToString();
+                ExecutionSteps += $"ERROR: {ex.Message}\n";
                 
-                // Send error notification if needed
-                // Email.SendMail(emailadr, "CDD Launcher ERROR - " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now), ExecutionSteps + ErrorReporting);
+                // Optional: Email sending logic here
+                // Email.SendMail(emailadr, "CDD Launcher ERROR", ExecutionSteps + ErrorReporting);
                 
-                Environment.Exit(-1);
+                Environment.Exit(-1); // Exit with error code
             }
 
-            ExecutionSteps = ExecutionSteps + "---------------------------------------------------------" + '\n';
-            ExecutionSteps = ExecutionSteps + "CDD Launcher finished @ " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + " - Environment : " + environment + '\n';
-            ExecutionSteps = ExecutionSteps + "---------------------------------------------------------" + '\n';
-
-            // Email.SendMail(emailadr, "CDD Launcher - " + string.Format("{0:yyyy-MM-dd : HH:mm:ss}", DateTime.Now) + " - Environment : " + environment, ExecutionSteps);
-            Helpers.FileWatcher(filewatcher);
+            ExecutionSteps += "---------------------------------------------------------\n";
+            ExecutionSteps += $"CDD Launcher finished @ {DateTime.Now:yyyy-MM-dd : HH:mm:ss}\n";
+            
+            // Only trigger file watcher if successful
+            if (!string.IsNullOrEmpty(filewatcher))
+            {
+                Helpers.FileWatcher(filewatcher);
+            }
         }
 
-        // Helper method to execute a process and return its exit code
+        // Helper to resolve absolute path
+        static string ResolvePath(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return string.Empty;
+            if (Path.IsPathRooted(fileName)) return fileName;
+
+            // Combine with the directory where the Launcher is running
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
+        }
+
         static int ExecuteProcess(string fileName, string arguments)
         {
-            Process proc = new Process();
-            proc.StartInfo.FileName = fileName;
-            proc.StartInfo.Arguments = arguments;
-            proc.StartInfo.UseShellExecute = false;
-            proc.StartInfo.RedirectStandardOutput = true;
-            proc.StartInfo.RedirectStandardError = true;
-            proc.EnableRaisingEvents = true;
-
-            proc.Start();
-            
-            // Optional: Read output for logging
-            string output = proc.StandardOutput.ReadToEnd();
-            string error = proc.StandardError.ReadToEnd();
-            
-            proc.WaitForExit();
-
-            if (!string.IsNullOrEmpty(output))
+            try
             {
-                Console.WriteLine($"[{arguments}] Output: {output}");
-            }
-            if (!string.IsNullOrEmpty(error))
-            {
-                Console.WriteLine($"[{arguments}] Error: {error}");
-            }
+                Process proc = new Process();
+                proc.StartInfo.FileName = fileName;
+                proc.StartInfo.Arguments = arguments;
+                
+                // Crucial settings for capturing output and avoiding path errors
+                proc.StartInfo.UseShellExecute = false; 
+                proc.StartInfo.WorkingDirectory = Path.GetDirectoryName(fileName); // Run in the exe's folder
+                proc.StartInfo.RedirectStandardOutput = true;
+                proc.StartInfo.RedirectStandardError = true;
+                proc.StartInfo.CreateNoWindow = true;
 
-            return proc.ExitCode;
+                Console.WriteLine($"[Executing] {Path.GetFileName(fileName)} {arguments}");
+
+                proc.Start();
+
+                // Read output asynchronously to prevent deadlocks
+                string output = proc.StandardOutput.ReadToEnd();
+                string error = proc.StandardError.ReadToEnd();
+
+                proc.WaitForExit();
+
+                // Log output if useful (or only on error)
+                if (!string.IsNullOrEmpty(output)) Console.WriteLine($"[{arguments} OUT]: {output.Trim()}");
+                if (!string.IsNullOrEmpty(error)) Console.WriteLine($"[{arguments} ERR]: {error.Trim()}");
+
+                return proc.ExitCode;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Execution Failed] {fileName} {arguments}: {ex.Message}");
+                return -1;
+            }
         }
     }
 }
